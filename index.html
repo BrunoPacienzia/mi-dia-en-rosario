@@ -444,12 +444,18 @@ button:active{transform:scale(.97)}
 #tabs button .n{flex:none}
 .shtog{display:none}
 @media (min-width:860px){
-  .sheet{top:140px;bottom:20px;height:auto!important;transition:transform .3s cubic-bezier(.2,.75,.25,1)}
+  .top{padding-left:max(20px,env(safe-area-inset-left,0px))}
+  .brand{flex:0 0 420px;width:420px;max-width:420px;box-sizing:border-box;transition:transform .3s cubic-bezier(.2,.75,.25,1)}
+  .sheet{top:var(--hdr-b,140px);bottom:20px;height:auto!important;transition:transform .3s cubic-bezier(.2,.75,.25,1)}
+  body.panel-off .brand{animation:none;transform:translateX(calc(-100% - 28px))}
+  .modes{transition:transform .3s cubic-bezier(.2,.75,.25,1)}
+  body.panel-off .modes{animation:none;transform:translateX(-432px)}
   .shtog{display:flex;align-items:center;gap:6px;position:absolute;top:12px;left:calc(100% + 8px);height:40px;padding:0 12px;border-radius:12px;border:1px solid var(--line);
     background:var(--surface);color:var(--ink);font-weight:700;font-size:13px;box-shadow:var(--shadow);white-space:nowrap}
   .shtog svg{width:16px;height:16px;transition:transform .3s}
   body.panel-off .sheet{transform:translateX(calc(-100% - 28px))}
   body.panel-off .shtog svg{transform:rotate(180deg)}
+  body.panel-off .shtog{left:calc(100% + 48px)}
   body.panel-off .recenter{left:20px}
   body.panel-off .feed{left:20px}
   body.panel-off .youare{left:50%}
@@ -1491,6 +1497,9 @@ function simRuta(){
     if (i >= pts.length - 1){ clearInterval(walkT); n.sim = false; toast('Llegaste a destino.'); showNav(true); }
   }, 140);
 }
+/* ---------- v5: el panel arranca justo debajo del encabezado (mismo ancho, misma columna) ---------- */
+{ const hb = document.querySelector('.brand'), fit = () => document.documentElement.style.setProperty('--hdr-b', Math.round(hb.getBoundingClientRect().bottom + 10) + 'px');
+  fit(); try { new ResizeObserver(fit).observe(hb); } catch(e) {} addEventListener('resize', fit); }
 /* ---------- v5: mostrar u ocultar el panel (compu) ---------- */
 $('#shtog').onclick = () => {
   const off = document.body.classList.toggle('panel-off');
