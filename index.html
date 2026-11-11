@@ -437,6 +437,42 @@ button:active{transform:scale(.97)}
 .acctmenu .btns{margin-top:10px}
 .who-head{display:flex;gap:10px;align-items:center;background:var(--surface-2);border-radius:14px;padding:10px 12px;margin:4px 0 8px}
 .who-head .av{width:36px;height:36px;border-radius:50%;background:var(--me);color:#fff;display:grid;place-items:center;font:800 13px var(--f-display,system-ui);flex:none}
+
+/* ===== v5: pestañas que entran, panel que se oculta ===== */
+#tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;overflow:visible}
+#tabs button{justify-content:center;padding:8px 4px;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+#tabs button .n{flex:none}
+.shtog{display:none}
+@media (min-width:860px){
+  .sheet{top:140px;bottom:20px;height:auto!important;transition:transform .3s cubic-bezier(.2,.75,.25,1)}
+  .shtog{display:flex;align-items:center;gap:6px;position:absolute;top:12px;left:calc(100% + 8px);height:40px;padding:0 12px;border-radius:12px;border:1px solid var(--line);
+    background:var(--surface);color:var(--ink);font-weight:700;font-size:13px;box-shadow:var(--shadow);white-space:nowrap}
+  .shtog svg{width:16px;height:16px;transition:transform .3s}
+  body.panel-off .sheet{transform:translateX(calc(-100% - 28px))}
+  body.panel-off .shtog svg{transform:rotate(180deg)}
+  body.panel-off .recenter{left:20px}
+  body.panel-off .feed{left:20px}
+  body.panel-off .youare{left:50%}
+}
+/* ===== v5: elemento seleccionado y ruta ===== */
+.selmk{position:relative;width:64px;height:64px;pointer-events:none}
+.selmk .ring{position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:3px solid #1d6fd6;animation:mering 1.6s ease-out infinite}
+.selmk .core{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#1d6fd6;border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.35)}
+.selmk .lbl{position:absolute;left:50%;bottom:calc(50% + 18px);transform:translateX(-50%);background:#1d6fd6;color:#fff;font:700 12px/1.2 var(--f-display,system-ui);padding:5px 9px;border-radius:9px;
+  white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;box-shadow:0 3px 10px rgba(0,0,0,.3)}
+.selmk .lbl::after{content:"";position:absolute;left:50%;top:100%;margin-left:-5px;border:5px solid transparent;border-top-color:#1d6fd6}
+.navc{display:grid;grid-template-columns:42px 1fr auto;gap:10px;align-items:center;background:var(--surface-2);border-radius:14px;padding:10px 12px;margin:10px 0 4px}
+.navc .arw{width:42px;height:42px;border-radius:50%;background:#1d6fd6;color:#fff;display:grid;place-items:center}
+.navc .arw svg{width:22px;height:22px}
+.navc b{font-size:15px}
+.navc small{color:var(--ink-2);font-size:12.5px}
+.navc .btn{margin:0;padding:9px 12px;font-size:13.5px}
+.steps{list-style:none;margin:8px 0 0;padding:0}
+.steps li{display:grid;grid-template-columns:26px 1fr auto;gap:8px;align-items:start;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.steps li:last-child{border-bottom:0}
+.steps li i{width:22px;height:22px;border-radius:50%;background:#1d6fd6;color:#fff;font:700 11px/22px system-ui;text-align:center;font-style:normal}
+.steps li small{color:var(--muted);white-space:nowrap}
+.navsum{font-size:13.5px;margin-top:6px}
 </style>
 </head>
 <body>
@@ -491,6 +527,7 @@ button:active{transform:scale(.97)}
 <button class="report" id="btnReport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Reportar</button>
 
 <section class="sheet" id="sheet" aria-label="Panel">
+  <button class="shtog" id="shtog" aria-expanded="true" aria-controls="sheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg><span>Ocultar panel</span></button>
   <div class="grab" id="grab" aria-hidden="true"><i></i></div>
   <nav class="tabs" id="tabs" role="tablist"></nav>
   <div class="body" id="body"></div>
@@ -676,7 +713,7 @@ function setBase(){
   map.getContainer().classList.toggle('map-dark', dark());
 }
 setBase(); matchMedia('(prefers-color-scheme: dark)').addEventListener('change', setBase);
-const lay = {}; ['foco','oreal','obras','pp','paradas','bicis','cortes','luminarias','contenedores','semaforos','reclamos','buses','ruta','linea'].forEach(k => lay[k] = L.layerGroup().addTo(map));
+const lay = {}; ['foco','oreal','obras','pp','paradas','bicis','cortes','luminarias','contenedores','semaforos','reclamos','buses','ruta','linea','nav','sel'].forEach(k => lay[k] = L.layerGroup().addTo(map));
 const canvasR = L.canvas({padding:.4});
 const icon = (cls, html, size, isNew) => L.divIcon({className:'', html:`<div class="mk ${cls}${isNew ? ' pop' : ''}" style="width:${size}px;height:${size}px">${html}</div>`, iconSize:[size,size], iconAnchor:[size/2,size/2]});
 
@@ -741,7 +778,7 @@ function setHeading(h){ S.heading = h; const w = document.getElementById('meWrap
 // centro del mapa para que tu posición quede en la parte visible (arriba del panel en el celu, a la derecha del panel en la compu)
 function visCenter(p, z){ z = z ?? map.getZoom(); const pt = map.project(L.latLng(p), z);
   const sh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-h')) || 210;
-  const off = innerWidth >= 860 ? L.point(-220, 0) : L.point(0, Math.min(sh, innerHeight * .6) / 2 - 40);
+  const off = innerWidth >= 860 ? L.point(document.body.classList.contains('panel-off') ? 0 : -220, 0) : L.point(0, Math.min(sh, innerHeight * .6) / 2 - 40);
   return map.unproject(pt.add(off), z); }
 const bearing = (a, b) => (Math.atan2((b[1]-a[1])*93500, (b[0]-a[0])*111320) * 180 / Math.PI + 360) % 360;
 
@@ -749,7 +786,7 @@ let lastDraw = null;
 function setPos(p, opts = {}){
   const prev = S.pos; S.pos = p; me.setLatLng(p);
   if (opts.heading != null) setHeading(opts.heading); else if (dist(prev, p) > 2) setHeading(bearing(prev, p));
-  if (S.follow){ S.focus = p; map.panTo(visCenter(p), {animate:true, duration:.4}); }
+  if (S.follow){ S.focus = p; if (!S.sel || S.nav?.sim || !map.getBounds().pad(-0.15).contains(p)) map.panTo(visCenter(p), {animate:true, duration:.4}); }
   if (S.follow && (!lastDraw || dist(lastDraw, p) > 8 || opts.force)){ lastDraw = p.slice(); drawAround(); if (!S.view) render(); else renderTabs(); }
   reverseGeo(S.follow ? p : S.focus);
   checkNudges();
@@ -766,34 +803,48 @@ $('#recenter').onclick = () => setFollow(true);
 /* caminar: tocar el mapa te lleva caminando hasta ahí; flechas/WASD dan un paso */
 let walkT = null;
 function walkTo(dst){
-  clearInterval(walkT); if (demo.on) demoStop();
+  clearInterval(walkT); if (S.nav) S.nav.sim = false; if (demo.on) demoStop();
   if (!S.follow) setFollow(true);
   const step = S.mode === 'auto' ? 40 : S.mode === 'bici' ? 20 : 9;
   walkT = setInterval(() => { const d = dist(S.pos, dst); if (d < step){ clearInterval(walkT); setPos(dst); return; }
     const f = step / d; setPos([S.pos[0] + (dst[0]-S.pos[0])*f, S.pos[1] + (dst[1]-S.pos[1])*f]); }, 140);
 }
-map.on('click', e => { if (S.gps) return toast('Estás siguiendo tu GPS real. Apagalo para simular movimiento.'); walkTo([e.latlng.lat, e.latlng.lng]); toast(`Caminando hacia ahí (${fmtM(dist(S.pos, [e.latlng.lat, e.latlng.lng]))})`); });
+map.on('click', e => { if (S.gps != null) return toast('Estás siguiendo tu GPS real. Apagalo para simular movimiento.'); walkTo([e.latlng.lat, e.latlng.lng]); toast(`Caminando hacia ahí (${fmtM(dist(S.pos, [e.latlng.lat, e.latlng.lng]))})`); });
 document.addEventListener('keydown', e => {
-  if (e.target.closest('input,textarea,select') || S.gps) return;
+  if (e.target.closest('input,textarea,select') || S.gps != null) return;
   const k = {ArrowUp:[1,0], w:[1,0], ArrowDown:[-1,0], s:[-1,0], ArrowLeft:[0,-1], a:[0,-1], ArrowRight:[0,1], d:[0,1]}[e.key]; if (!k) return;
   e.preventDefault(); clearInterval(walkT); if (!S.follow) setFollow(true);
   const st = S.mode === 'auto' ? 40 : S.mode === 'bici' ? 20 : 12;
   setPos([S.pos[0] + k[0]*st/111320, S.pos[1] + k[1]*st/93500]);
 });
 
-/* GPS real */
-$('#btnLoc').onclick = () => {
-  if (S.gps){ navigator.geolocation.clearWatch(S.gps); S.gps = null; $('#btnLoc').setAttribute('aria-pressed','false'); return toast('Seguimiento por GPS apagado. Tocá el mapa para moverte.'); }
-  if (!navigator.geolocation) return toast('Este navegador no permite ubicación. Tocá el mapa para moverte.');
-  let first = true;
+/* GPS real: arranca solo al abrir la app; el botón lo apaga o lo vuelve a prender */
+S.real = false;
+function stopGPS(){ if (S.gps != null) navigator.geolocation.clearWatch(S.gps); S.gps = null; $('#btnLoc').setAttribute('aria-pressed','false'); }
+function startGPS(auto, lowAcc){
+  if (!navigator.geolocation) return auto || toast('Este navegador no permite ubicación. Tocá el mapa para moverte.');
+  if (!window.isSecureContext) return auto || toast('La ubicación solo funciona abriendo la app desde el link https.');
+  stopGPS(); let first = true;
   S.gps = navigator.geolocation.watchPosition(pos => {
     const q = [pos.coords.latitude, pos.coords.longitude];
-    if (dist(q, [-32.95,-60.66]) > 25000){ toast('Estás fuera de Rosario: seguimos en modo simulado.'); navigator.geolocation.clearWatch(S.gps); S.gps = null; $('#btnLoc').setAttribute('aria-pressed','false'); return; }
-    if (first){ first = false; demoStop(); clearInterval(walkT); toast('Siguiendo tu ubicación real'); setFollow(true); }
+    if (dist(q, [-32.95,-60.66]) > 25000){ stopGPS(); S.real = false; header(); return toast('Estás fuera de Rosario: la app queda en una ubicación de ejemplo. Tocá el mapa para moverte.'); }
+    if (first){ first = false; demoStop(); clearInterval(walkT); S.real = true; setFollow(true); setPos(q, {force:true});
+      const z = Math.max(map.getZoom(), ZOOM_MODO[S.mode]); map.setView(visCenter(q, z), z, {animate:false});
+      toast(`Usando tu ubicación real${pos.coords.accuracy > 150 ? ` (precisión de ${Math.round(pos.coords.accuracy)} m)` : ''}`); return; }
     setPos(q, {heading: pos.coords.heading != null && !isNaN(pos.coords.heading) && pos.coords.speed > .5 ? pos.coords.heading : undefined});
-  }, err => { toast('No pudimos obtener tu ubicación. Tocá el mapa para moverte.'); if (S.gps != null) navigator.geolocation.clearWatch(S.gps); S.gps = null; $('#btnLoc').setAttribute('aria-pressed','false'); },
-  {enableHighAccuracy:true, maximumAge:3000, timeout:15000});
-  $('#btnLoc').setAttribute('aria-pressed','true');
+  }, err => {
+    stopGPS();
+    if (err.code === 3 && !lowAcc) return startGPS(auto, true);          // tardó mucho: reintenta con menos precisión
+    S.real = false; header();
+    toast(err.code === 1 ? 'No diste permiso de ubicación. Activalo en la configuración del navegador para este sitio y tocá el botón de ubicación.'
+                         : 'No pudimos obtener tu ubicación. Revisá que el GPS esté prendido o tocá el mapa para moverte.');
+  }, {enableHighAccuracy:!lowAcc, maximumAge:5000, timeout: lowAcc ? 20000 : 12000});
+  $('#btnLoc').setAttribute('aria-pressed','true'); header();
+}
+$('#btnLoc').onclick = () => {
+  if (S.gps != null){ stopGPS(); return toast('Seguimiento por GPS apagado. Tocá el mapa para moverte.'); }
+  if (S.real && !S.follow) setFollow(true);
+  startGPS(false);
 };
 
 /* ---------- encabezado ---------- */
@@ -802,7 +853,7 @@ function header(){
   $('#cityTag').textContent = a?.barrio ? a.barrio : `Distrito ${a?.distrito || zonaDe(S.focus)}`;
   const lugar = a?.calle ? `${a.calle} · Distrito ${a.distrito}` : `Distrito ${a?.distrito || zonaDe(S.focus)}`;
   $('#zone').innerHTML = `${S.follow ? '' : '<strong>Explorando:</strong> '}${esc(lugar)}`;
-  $('#youareTxt').textContent = a?.calle && S.follow ? `Estás en ${a.calle}${a.barrio ? ' · ' + a.barrio : ''}` : 'Estás acá';
+  $('#youareTxt').textContent = !S.real ? (S.gps != null ? 'Buscando tu ubicación…' : 'Ubicación de ejemplo · tocá ◎ para usar tu GPS') : a?.calle && S.follow ? `Estás en ${a.calle}${a.barrio ? ' · ' + a.barrio : ''}` : 'Estás acá';
   const eb = document.querySelector('.brand .eyebrow'); if (eb) eb.textContent = ME.user ? `Hola, ${ME.user.nombre.split(' ')[0]}` : 'Ciudadana · Rosario';
 }
 $('#youare').onclick = () => { if (!S.follow) setFollow(true); const z = Math.max(map.getZoom(), ZOOM_MODO[S.mode]); map.setView(visCenter(S.pos, z), z); };
@@ -845,7 +896,7 @@ function toast(t){ const el = $('#toast'); el.textContent = t; el.hidden = false
 const demo = {on:false, i:0, pts:[], timer:null};
 (function(){ const Rt = D.sim.ruta_demo; for (let k = 0; k < Rt.length - 1; k++){ const n = Math.max(2, Math.round(dist(Rt[k], Rt[k+1]) / 11)); for (let j = 0; j < n; j++) demo.pts.push([Rt[k][0] + (Rt[k+1][0]-Rt[k][0])*j/n, Rt[k][1] + (Rt[k+1][1]-Rt[k][1])*j/n]); } demo.pts.push(Rt[Rt.length-1]); })();
 function demoStart(){
-  if (S.gps) $('#btnLoc').click();
+  if (S.gps != null) stopGPS(); S.real = false;
   clearInterval(walkT);
   demo.on = true; demo.i = 0; S.prompted.clear(); S.view = null; S.tab = 'cerca'; lay.linea.clearLayers(); lay.buses.clearLayers(); $('#layers').hidden = true;
   $('#demo').hidden = false; $('#btnDemo').setAttribute('aria-pressed','true');
@@ -907,7 +958,7 @@ $('#btnLayers').onclick = () => { const l = $('#layers'); l.hidden = !l.hidden; 
 const sheet = $('#sheet');
 const SH = [210, Math.round(innerHeight * .55), innerHeight - 100];
 let shIdx = 0;
-const setSheet = i => { shIdx = Math.max(0, Math.min(2, i)); document.documentElement.style.setProperty('--sheet-h', SH[shIdx] + 'px'); if (typeof map !== 'undefined' && S.follow && innerWidth < 860) setTimeout(() => map.panTo(visCenter(S.pos), {animate:true, duration:.3}), 60); };
+const setSheet = i => { shIdx = Math.max(0, Math.min(2, i)); document.documentElement.style.setProperty('--sheet-h', SH[shIdx] + 'px'); if (typeof map !== 'undefined' && S.follow && !S.sel && innerWidth < 860) setTimeout(() => map.panTo(visCenter(S.pos), {animate:true, duration:.3}), 60); };
 setSheet(0);
 (function(){ const g = $('#grab'); let y0, h0;
   g.addEventListener('pointerdown', e => { y0 = e.clientY; h0 = sheet.getBoundingClientRect().height; sheet.classList.add('dragging'); g.setPointerCapture(e.pointerId); });
@@ -917,7 +968,7 @@ setSheet(0);
 })();
 const expand = () => { if (innerWidth < 860 && shIdx === 0) setSheet(1); };
 
-const TABS = [['cerca','A tu alrededor'], ['movilidad','Movilidad'], ['alertas','Alertas'], ['aportes','Mis aportes']];
+const TABS = [['cerca','Cerca'], ['movilidad','Movilidad'], ['alertas','Alertas'], ['aportes','Mis aportes']];
 function renderTabs(){
   const nAl = (S.A?.cortes || []).filter(x => afectaModo(x.o)).length;
   $('#tabs').innerHTML = TABS.map(([k,t]) => `<button role="tab" aria-selected="${S.tab === k && !S.view}" data-t="${k}">${t}${k === 'alertas' && nAl ? `<span class="n">${nAl}</span>` : ''}${k === 'aportes' && S.mine.length ? `<span class="n" style="background:var(--celeste)">${S.mine.length}</span>` : ''}</button>`).join('');
@@ -955,6 +1006,7 @@ async function fillArr(s){
 function render(){
   renderTabs();
   const B = $('#body');
+  if (!S.view) clearSel();
   if (S.view) return renderView(B);
   if (!S.A) drawAround();
   const A = S.A, p = S.follow ? S.pos : S.focus;
@@ -999,7 +1051,7 @@ function openRef(ref){ const [k, id] = ref.split(':');
   if (o) open({k, o}); }
 
 /* ---------- detalle ---------- */
-function open(v){ S.view = v; lay.linea.clearLayers(); lay.buses.clearLayers(); render(); expand(); }
+function open(v){ const prev = S.sel?.key; S.view = v; lay.linea.clearLayers(); lay.buses.clearLayers(); selectOnMap(v, prev); render(); expand(); if (S.sel?.key !== prev || !S.sel) $('#body').scrollTop = 0; }
 function head(t, sub){ return `<div class="dhead"><button class="back" id="back" aria-label="Volver">${ICON.back}</button><div style="min-width:0"><h2>${t}</h2>${sub ? `<div style="margin-top:4px">${sub}</div>` : ''}</div></div>`; }
 let busT;
 function renderView(B){
@@ -1082,6 +1134,7 @@ function renderView(B){
   else if (v.k === 'opinar') return renderOpinar(B);
   else if (v.k === 'ajustar') return renderAjuste(B);
   B.innerHTML = h;
+  navCard(B, v);
   $('#back').onclick = () => { clearInterval(busT); S.view = null; lay.linea.clearLayers(); lay.buses.clearLayers(); render(); };
   const aj = $('#ajustar'); if (aj) aj.onclick = () => open({k:'ajustar', o, tipo:v.k});
   const su = $('#sumar'); if (su) su.onclick = () => sumarme(v.k === 'columna' ? reclamos.find(x => x.columna === o.i) : ELEM[v.k] ? reclamos.find(x => x.elem === ELEM[v.k].pre + o.i) : o);
@@ -1329,6 +1382,125 @@ $('#btnAcct').onclick = () => {
   $('#mOut').onclick = () => { mn.hidden = true; setUser(null); toast('Cerraste sesión.'); };
 };
 
+/* ---------- v5: selección en el mapa y "cómo llegar" ---------- */
+S.sel = null; S.nav = null;
+const CARD = ['norte','noreste','este','sureste','sur','suroeste','oeste','noroeste'];
+const cardinal = b => CARD[Math.round(b / 45) % 8];
+const VEL = {peaton:75, bici:250, auto:330};               // metros por minuto en la ciudad
+const fmtMin = m => m < 1 ? 'menos de 1 min' : m < 60 ? `${Math.round(m)} min` : `${Math.floor(m / 60)} h ${Math.round(m % 60)} min`;
+function locOf(v){ const o = v?.o; if (!o || v.k === 'reportar') return null;
+  if (v.k === 'corte' && o.tramo) return [(o.tramo[0][0] + o.tramo[1][0]) / 2, (o.tramo[0][1] + o.tramo[1][1]) / 2];
+  return o.lat != null ? [o.lat, o.lon] : null; }
+function nombreDe(v){ const o = v.o; return v.k === 'parada' ? `Parada N° ${o.num}` : v.k === 'columna' ? 'Columna de alumbrado' : v.k === 'semaforo' ? 'Semáforo'
+  : v.k === 'contenedor' ? 'Contenedor' : v.k === 'corte' ? (o.tipo === 'total' ? 'Corte total' : 'Reducción de calzada') : (o.titulo || o.nombre || ''); }
+function clearSel(){ if (!S.sel) return; S.sel = null; lay.sel.clearLayers(); if (!S.nav?.sim){ S.nav = null; lay.nav.clearLayers(); } }
+function padVista(){
+  const desk = innerWidth >= 860, panel = desk && !document.body.classList.contains('panel-off');
+  const sh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-h')) || 210;
+  return {paddingTopLeft:[panel ? 470 : 40, desk ? 130 : 175], paddingBottomRight:[desk ? 90 : 40, desk ? 40 : Math.min(sh, innerHeight * .6) + 30], maxZoom:17};
+}
+function selectOnMap(v, prevKey){
+  const at = locOf(v); if (!at){ return; }
+  const key = v.k + ':' + (v.o.id ?? v.o.num ?? v.o.codigo ?? v.o.i);
+  if (S.nav && S.nav.key !== key){ stopNavSim(); S.nav = null; lay.nav.clearLayers(); }
+  S.sel = {key, at}; lay.sel.clearLayers();
+  L.marker(at, {icon:L.divIcon({className:'', html:`<div class="selmk"><div class="ring"></div><div class="core"></div><div class="lbl">${esc(nombreDe(v))}</div></div>`, iconSize:[64,64], iconAnchor:[32,32]}), interactive:false, zIndexOffset:1800}).addTo(lay.sel);
+  if (key === prevKey) return;                       // misma cosa (por ejemplo, al volver de un formulario): no mover el mapa
+  setTimeout(() => {                                  // después de que el panel cambió de tamaño
+    const p = S.follow ? S.pos : S.focus, b = L.latLngBounds([p, at]);
+    map.flyToBounds(b, {...padVista(), duration:.6});
+  }, 0);
+}
+const ARW = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l7 19-7-4-7 4z"/></svg>';
+function navCard(B, v){
+  if (!S.sel || v.k === 'corte' || !B.querySelector('.dhead')) return;
+  const p = S.pos, at = S.sel.at, d = dist(p, at), br = bearing(p, at);
+  const verbo = {peaton:'caminando', bici:'en bici', auto:'en auto'}[S.mode];
+  B.querySelector('.dhead').insertAdjacentHTML('afterend', `<div class="navc"><span class="arw" style="transform:rotate(${br}deg)" aria-hidden="true">${ARW}</span>
+    <div><b>${fmtM(d)}</b> · ${fmtMin(d * 1.3 / VEL[S.mode])} ${verbo}<br><small>Queda hacia el ${cardinal(br)} de donde estás</small></div>
+    <button class="btn pri" id="navGo">${S.nav ? 'Ver ruta' : 'Cómo llegar'}</button></div><div id="navOut"></div>`);
+  $('#navGo').onclick = () => S.nav ? (map.flyToBounds(L.polyline(S.nav.pts).getBounds(), {...padVista(), duration:.6}), showNav()) : calcRuta();
+  if (S.nav) showNav(true);
+}
+const PERFIL = {peaton:['routed-foot','foot'], bici:['routed-bike','bike'], auto:['routed-car','driving']};
+async function osrm(a, b){
+  const [srv, prof] = PERFIL[S.mode], ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 9000);
+  try {
+    const r = await fetch(`https://routing.openstreetmap.de/${srv}/route/v1/${prof}/${a[1]},${a[0]};${b[1]},${b[0]}?overview=full&geometries=geojson&steps=true`, {signal:ctl.signal});
+    const j = await r.json(); if (j.code !== 'Ok' || !j.routes?.length) throw new Error('sin ruta'); return j.routes[0];
+  } finally { clearTimeout(t); }
+}
+const LADO = {left:'a la izquierda', right:'a la derecha', 'slight left':'levemente a la izquierda', 'slight right':'levemente a la derecha', 'sharp left':'a la izquierda', 'sharp right':'a la derecha'};
+function pasoTxt(s){
+  const m = s.maneuver, calle = s.name ? `por ${s.name}` : '', en = s.name ? ` en ${s.name}` : '';
+  if (m.type === 'depart') return `Salí hacia el ${cardinal(m.bearing_after || 0)} ${calle}`.trim();
+  if (m.type === 'arrive') return 'Llegaste a destino';
+  if (m.type === 'roundabout' || m.type === 'rotary') return `En la rotonda, tomá la ${m.exit || 1}.ª salida${s.name ? ' hacia ' + s.name : ''}`;
+  if (m.modifier === 'uturn') return `Pegá la vuelta${en}`;
+  if (m.modifier === 'straight' || m.type === 'new name' || m.type === 'continue' || !LADO[m.modifier]) return `Seguí derecho ${calle}`.trim();
+  return `Doblá ${LADO[m.modifier]}${en}`;
+}
+async function calcRuta(){
+  const at = S.sel.at, key = S.sel.key, from = S.pos.slice(), out = $('#navOut');
+  if (out) out.innerHTML = '<p class="navsum">Calculando la ruta…</p>';
+  let nav;
+  try {
+    const r = await osrm(from, at);
+    const pasos = [];
+    for (const s of r.legs[0].steps){ const t = pasoTxt(s); if (pasos.length && pasos[pasos.length - 1].t === t) pasos[pasos.length - 1].d += s.distance; else pasos.push({t, d:s.distance}); }
+    nav = {pts:r.geometry.coordinates.map(c => [c[1], c[0]]), dist:r.distance, pasos, real:true};
+  } catch(e) {
+    const d = dist(from, at);
+    nav = {pts:[], dist:d, pasos:[{t:`Andá hacia el ${cardinal(bearing(from, at))}`, d}, {t:'Llegaste a destino', d:0}], real:false};
+  }
+  if (S.sel?.key !== key) return;                    // el usuario ya abrió otra cosa
+  nav.pts = [from, ...nav.pts, at]; nav.key = key; S.nav = nav;
+  if (innerWidth < 860) setSheet(0);                 // en el celu se achica el panel para ver la ruta
+  lay.nav.clearLayers();
+  L.polyline(nav.pts, {color:'#fff', weight:10, opacity:.9, lineCap:'round', lineJoin:'round', interactive:false}).addTo(lay.nav);
+  L.polyline(nav.pts, {color:'#1d6fd6', weight:6, opacity:.95, lineCap:'round', lineJoin:'round', interactive:false, dashArray: nav.real ? null : '2 10'}).addTo(lay.nav);
+  map.flyToBounds(L.polyline(nav.pts).getBounds(), {...padVista(), duration:.6});
+  showNav();
+}
+function showNav(quiet){
+  const n = S.nav, out = $('#navOut'); if (!n || !out) return;
+  const verbo = {peaton:'a pie', bici:'en bici', auto:'en auto'}[S.mode];
+  out.innerHTML = `<p class="navsum"><b>${fmtM(n.dist)}</b> · unos ${fmtMin(n.dist / VEL[S.mode])} ${verbo}${n.real ? '' : '<br><small style="color:var(--ink-2)">No pudimos calcular la ruta por calles, así que te marcamos la dirección en línea recta.</small>'}</p>
+    <ol class="steps">${n.pasos.map((s, i) => `<li><i>${i + 1}</i><span>${esc(s.t)}</span><small>${s.d ? fmtM(s.d) : ''}</small></li>`).join('')}</ol>
+    <div class="btns"><button class="btn pri" id="navSim">${n.sim ? 'Detener recorrido' : S.gps != null ? 'Seguir con mi GPS' : 'Simular recorrido'}</button><button class="btn sec2" id="navOff">Quitar ruta</button></div>`;
+  $('#navSim').onclick = () => n.sim ? stopNavSim() : S.gps != null ? (setFollow(true), map.setView(visCenter(S.pos, 17), 17), toast('Seguí la línea azul: el mapa te va siguiendo con el GPS.')) : simRuta();
+  $('#navOff').onclick = () => { stopNavSim(); S.nav = null; lay.nav.clearLayers(); out.innerHTML = ''; const g = $('#navGo'); if (g) g.textContent = 'Cómo llegar'; };
+  const g = $('#navGo'); if (g) g.textContent = 'Ver ruta';
+  if (!quiet) out.scrollIntoView({block:'nearest', behavior:'smooth'});
+}
+function stopNavSim(){ if (S.nav?.sim){ S.nav.sim = false; clearInterval(walkT); const b = $('#navSim'); if (b) b.textContent = 'Simular recorrido'; } }
+function simRuta(){
+  const n = S.nav; if (!n) return;
+  clearInterval(walkT); if (demo.on) demoStop(); setFollow(true);
+  let i = 0; const pts = n.pts.slice(); pts[0] = S.pos.slice();          // arranca desde donde estás ahora
+  const step = S.mode === 'auto' ? 38 : S.mode === 'bici' ? 20 : 10;
+  n.sim = true; if (innerWidth < 860) setSheet(0); showNav(true); toast('Simulando el recorrido. Los avisos aparecen como si fueras yendo.');
+  map.setView(visCenter(S.pos, 17), 17);
+  walkT = setInterval(() => {
+    let left = step, cur = S.pos.slice();
+    while (left > 0 && i < pts.length - 1){
+      const nx = pts[i + 1], d = dist(cur, nx);
+      if (d <= left){ left -= d; cur = nx.slice(); i++; } else { const f = left / d; cur = [cur[0] + (nx[0] - cur[0]) * f, cur[1] + (nx[1] - cur[1]) * f]; left = 0; }
+    }
+    setPos(cur);
+    if (i >= pts.length - 1){ clearInterval(walkT); n.sim = false; toast('Llegaste a destino.'); showNav(true); }
+  }, 140);
+}
+/* ---------- v5: mostrar u ocultar el panel (compu) ---------- */
+$('#shtog').onclick = () => {
+  const off = document.body.classList.toggle('panel-off');
+  $('#shtog').setAttribute('aria-expanded', String(!off)); $('#shtog span').textContent = off ? 'Mostrar panel' : 'Ocultar panel';
+  try { localStorage.setItem('mdr-panel-off', off ? '1' : ''); } catch(e) {}
+  if (S.sel) map.flyToBounds(L.latLngBounds([S.follow ? S.pos : S.focus, S.sel.at]), {...padVista(), duration:.4});
+  else if (S.follow) map.panTo(visCenter(S.pos), {animate:true, duration:.3});
+};
+try { if (localStorage.getItem('mdr-panel-off') && innerWidth >= 860) $('#shtog').click(); } catch(e) {}
+
 /* ---------- inicio ---------- */
 seedDemo();
 { const sid = store.get('mdr-session', null), U = store.get('mdr-users', {}); if (sid && U[sid]) ME.user = U[sid]; }
@@ -1336,6 +1508,7 @@ loadMine(); refreshMe(); updAcct();
 map.setView(visCenter(S.pos, ZOOM_MODO.peaton), ZOOM_MODO.peaton, {animate:false});
 drawAround(); header(); render(); reverseGeo(S.pos, true);
 if (!ME.user) authOpen();
+startGPS(true);
 setInterval(() => { if (!S.view && (S.tab === 'cerca' || S.tab === 'movilidad')) render(); }, 30000);
 window.__mdr = {setPos, open, S, drawAround, ME, setUser, conts, semaf};
 })();
