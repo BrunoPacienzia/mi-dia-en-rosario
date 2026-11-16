@@ -727,7 +727,8 @@ function setBase(){
 }
 setBase(); matchMedia('(prefers-color-scheme: dark)').addEventListener('change', setBase);
 const lay = {}; ['foco','oreal','obras','pp','paradas','bicis','cortes','luminarias','contenedores','camaras','wifi','semaforos','reclamos','buses','ruta','linea','nav','sel'].forEach(k => lay[k] = L.layerGroup().addTo(map));
-const canvasR = L.canvas({padding:.4});
+// tolerance: margen alrededor de cada puntito para que sea fácil tocarlo (más grande en pantallas táctiles)
+const canvasR = L.canvas({padding:.4, tolerance: matchMedia('(pointer: coarse)').matches ? 14 : 7});
 const icon = (cls, html, size, isNew) => L.divIcon({className:'', html:`<div class="mk ${cls}${isNew ? ' pop' : ''}" style="width:${size}px;height:${size}px">${html}</div>`, iconSize:[size,size], iconAnchor:[size/2,size/2]});
 
 // "linterna": se oscurece lo que está fuera de tu radio
@@ -828,7 +829,12 @@ function walkTo(dst){
   walkT = setInterval(() => { const d = dist(S.pos, dst); if (d < step){ clearInterval(walkT); setPos(dst); return; }
     const f = step / d; setPos([S.pos[0] + (dst[0]-S.pos[0])*f, S.pos[1] + (dst[1]-S.pos[1])*f]); }, 140);
 }
-map.on('click', e => { if (S.gps != null) return toast('Estás siguiendo tu GPS real. Apagalo para simular movimiento.'); walkTo([e.latlng.lat, e.latlng.lng]); toast(`Caminando hacia ahí (${fmtM(dist(S.pos, [e.latlng.lat, e.latlng.lng]))})`); });
+// si el toque fue sobre un elemento (luminaria, contenedor, parada...), se abre ese elemento y no se camina hasta ahí
+map.on('click', e => setTimeout(() => {
+  if (Date.now() - (S.lastOpen || 0) < 400) return;
+  if (S.gps != null) return toast('Estás siguiendo tu GPS real. Apagalo para simular movimiento.');
+  walkTo([e.latlng.lat, e.latlng.lng]); toast(`Caminando hacia ahí (${fmtM(dist(S.pos, [e.latlng.lat, e.latlng.lng]))})`);
+}, 0));
 document.addEventListener('keydown', e => {
   if (e.target.closest('input,textarea,select') || S.gps != null) return;
   const k = {ArrowUp:[1,0], w:[1,0], ArrowDown:[-1,0], s:[-1,0], ArrowLeft:[0,-1], a:[0,-1], ArrowRight:[0,1], d:[0,1]}[e.key]; if (!k) return;
@@ -1070,7 +1076,7 @@ function openRef(ref){ const [k, id] = ref.split(':');
   if (o) open({k, o}); }
 
 /* ---------- detalle ---------- */
-function open(v){ const prev = S.sel?.key; S.view = v; lay.linea.clearLayers(); lay.buses.clearLayers(); selectOnMap(v, prev); render(); expand(); if (S.sel?.key !== prev || !S.sel) $('#body').scrollTop = 0; }
+function open(v){ S.lastOpen = Date.now(); const prev = S.sel?.key; S.view = v; lay.linea.clearLayers(); lay.buses.clearLayers(); selectOnMap(v, prev); render(); expand(); if (S.sel?.key !== prev || !S.sel) $('#body').scrollTop = 0; }
 function head(t, sub){ return `<div class="dhead"><button class="back" id="back" aria-label="Volver">${ICON.back}</button><div style="min-width:0"><h2>${t}</h2>${sub ? `<div style="margin-top:4px">${sub}</div>` : ''}</div></div>`; }
 let busT;
 function renderView(B){
@@ -1548,7 +1554,7 @@ drawAround(); header(); render(); reverseGeo(S.pos, true);
 if (!ME.user) authOpen();
 startGPS(true);
 setInterval(() => { if (!S.view && (S.tab === 'cerca' || S.tab === 'movilidad')) render(); }, 30000);
-window.__mdr = {setPos, open, S, drawAround, ME, setUser, conts, semaf};
+window.__mdr = {setPos, open, S, drawAround, ME, setUser, conts, semaf, map, cols};
 })();
 </script>
 </body>
