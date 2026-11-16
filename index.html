@@ -727,6 +727,29 @@ function setBase(){
 }
 setBase(); matchMedia('(prefers-color-scheme: dark)').addEventListener('change', setBase);
 const lay = {}; ['foco','oreal','obras','pp','paradas','bicis','cortes','luminarias','contenedores','camaras','wifi','semaforos','reclamos','buses','ruta','linea','nav','sel'].forEach(k => lay[k] = L.layerGroup().addTo(map));
+/* Íconos dibujados en el canvas (rápido aunque haya miles): foquito amarillo para el alumbrado,
+   tachito verde o naranja para los contenedores. Se tocan igual que un punto, con la misma tolerancia. */
+const Glyph = L.CircleMarker.extend({
+  _updatePath(){
+    const R = this._renderer; if (!R._drawing || this._empty()) return;
+    const c = R._ctx, p = this._point, s = this._radius, o = this.options, linea = dark() ? '#0d1418' : '#ffffff';
+    c.save(); c.translate(p.x, p.y); c.lineJoin = 'round';
+    if (o.glyph === 'luz'){
+      if (s >= 6){ c.beginPath(); c.arc(0, -s * .15, s * 1.05, 0, 7); c.fillStyle = 'rgba(255,196,0,.22)'; c.fill(); }   // halo de luz
+      c.beginPath(); c.arc(0, -s * .2, s * .62, 0, 7); c.fillStyle = '#ffc20e'; c.fill(); c.lineWidth = 1.4; c.strokeStyle = '#7a5a00'; c.stroke();  // bulbo
+      c.fillStyle = '#4a4a4a'; c.fillRect(-s * .28, s * .38, s * .56, s * .38);                                                // rosca
+      if (o.colgante && s >= 6){ c.beginPath(); c.moveTo(-s, -s * .95); c.lineTo(s, -s * .95); c.lineWidth = 1.2; c.strokeStyle = '#7a5a00'; c.stroke(); } // cable
+    } else {
+      const w = s * 1.3, h = s * 1.15;
+      c.beginPath(); c.roundRect ? c.roundRect(-w / 2, -h / 2 + s * .2, w, h, s * .2) : c.rect(-w / 2, -h / 2 + s * .2, w, h);
+      c.fillStyle = o.fill2; c.fill(); c.lineWidth = 1.4; c.strokeStyle = linea; c.stroke();                                    // cuerpo
+      c.fillStyle = o.fill2; c.fillRect(-w / 2 - s * .12, -h / 2 - s * .12, w + s * .24, s * .26); c.strokeRect(-w / 2 - s * .12, -h / 2 - s * .12, w + s * .24, s * .26); // tapa
+      if (s >= 6){ c.beginPath(); for (const x of [-w * .18, w * .18]){ c.moveTo(x, -h / 2 + s * .45); c.lineTo(x, h / 2 + s * .05); } c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 1.1; c.stroke(); } // rayas
+    }
+    if (o.alerta){ c.beginPath(); c.arc(0, 0, s * 1.15, 0, 7); c.lineWidth = 2.2; c.strokeStyle = '#c8372d'; c.stroke(); }    // reclamo o problema
+    c.restore();
+  }
+});
 // tolerance: margen alrededor de cada puntito para que sea fácil tocarlo (más grande en pantallas táctiles)
 const canvasR = L.canvas({padding:.4, tolerance: matchMedia('(pointer: coarse)').matches ? 14 : 7});
 const icon = (cls, html, size, isNew) => L.divIcon({className:'', html:`<div class="mk ${cls}${isNew ? ' pop' : ''}" style="width:${size}px;height:${size}px">${html}</div>`, iconSize:[size,size], iconAnchor:[size/2,size/2]});
@@ -767,11 +790,11 @@ function drawAround(){
     else L.circleMarker([s.lat,s.lon], {renderer:canvasR, radius:4.5, weight:2, color:'#fff', fillColor:'#2a86c4', fillOpacity:1}).on('click', () => open({k:'parada', o:s})).addTo(lay.paradas); });
   const recCols = new Set(reclamos.filter(x => x.columna != null).map(x => x.columna));
   if (S.layers.luminarias && z >= 15) query(ixCols, p, r).forEach(i => { const c = cols[i]; if (dist(p, c) > r) return; const con = recCols.has(i);
-    L.circleMarker(c, {renderer:canvasR, radius: con ? 6 : (z >= 18 ? 5 : 3.5), weight: con ? 2.5 : 1, color: con ? '#c8372d' : (dark() ? '#0d1418' : '#fff'), fillColor: con ? '#c8372d' : '#e8a600', fillOpacity: con ? .35 : .95})
+    new Glyph(c, {renderer:canvasR, glyph:'luz', radius: z >= 18 ? 9 : z >= 17 ? 7.5 : z >= 16 ? 6 : 4.5, weight:3, alerta:con, colgante:i >= NCOL})
       .on('click', () => open({k:'columna', o:{i, lat:c[0], lon:c[1]}})).addTo(lay.luminarias); });
   const recEl = new Set(reclamos.filter(x => x.elem).map(x => x.elem));
   if (S.layers.contenedores && z >= 15) query(ixCont, p, r).forEach(i => { const c = conts[i]; if (dist(p, c) > r) return; const con = recEl.has('C' + i), mal = c[3] !== 'ok';
-    L.circleMarker([c[0], c[1]], {renderer:canvasR, radius: con ? 6.5 : (z >= 17 ? 5.5 : 4), weight: con || mal ? 2.5 : 1.5, color: con || mal ? '#c8372d' : (dark() ? '#0d1418' : '#fff'), fillColor: c[2] === 'reciclables' ? '#ee8a12' : '#2f8a4e', fillOpacity:.95})
+    new Glyph([c[0], c[1]], {renderer:canvasR, glyph:'tacho', radius: z >= 18 ? 10 : z >= 17 ? 8.5 : z >= 16 ? 7 : 5, weight:3, alerta:con || mal, fill2: c[2] === 'reciclables' ? '#ee8a12' : '#2f8a4e'})
       .on('click', () => open({k:'contenedor', o:{i, lat:c[0], lon:c[1], tipo:c[2], estado:c[3]}})).addTo(lay.contenedores); });
   if (S.layers.wifi && z >= 14) query(ixWifi, p, r).forEach(i => { const c = wifi[i]; if (dist(p, c) > r) return;
     L.marker([c[0], c[1]], {icon:L.divIcon({className:'', html:`<div class="mk" style="background:#0f8a8a;width:26px;height:26px">${ICON.wifi}</div>`, iconSize:[26,26], iconAnchor:[13,13]}), title:'WiFi público', zIndexOffset:160})
