@@ -591,7 +591,9 @@ const ALERTA_MODO = {peaton:180, bici:350, auto:700};
 const stops = D.tup.stops.map(s => ({id:'P'+s[0], num:s[0], lat:s[1], lon:s[2], lineas:s[3]}));
 const lines = Object.fromEntries(D.tup.lines.map(l => [l.id, l]));
 const bicis = D.bici.stations.map(s => ({id:'B'+s[0], codigo:s[0], nombre:s[1], dir:s[2], lat:s[3], lon:s[4], bicis:s[5], libres:s[6], estado:s[7], cap:s[8] || (s[5]+s[6])}));
-const cols = D.luminarias.columnas;
+const NCOL = D.luminarias.columnas.length;       // primero las columnas (postes) y después las transversales (colgadas de un cable)
+const cols = D.luminarias.columnas.concat(D.luminarias.transversales || []);
+const esTrans = i => i >= NCOL;
 const oreal = D.obras_infomapa.obras;
 const pp = D.pp.proyectos;
 const {obras, cortes, reclamos} = D.sim;
@@ -964,7 +966,7 @@ async function buscar(t){
 
 /* ---------- capas ---------- */
 const LAYERS = [['oreal','Obras del Infomapa','#5b4bc4','Real'], ['pp','Presupuesto Participativo','#e8a600','Real'], ['paradas','Paradas de colectivo','#2a86c4','Real'],
-  ['bicis','Mi Bici Tu Bici','#0f8a83','Real'], ['luminarias','Columnas de alumbrado','#e8a600','Real'], ['obras','Reparaciones (bacheo, veredas)','#1f8a4c','Simulado'],
+  ['bicis','Mi Bici Tu Bici','#0f8a83','Real'], ['luminarias','Alumbrado (postes y colgantes)','#e8a600','Real'], ['obras','Reparaciones (bacheo, veredas)','#1f8a4c','Simulado'],
   ['semaforos','Semáforos','#14222b','Real'], ['contenedores','Contenedores (verde residuos, naranja reciclables)','#2f8a4e','Real'], ['wifi','WiFi público','#0f8a8a','Real'], ['camaras','Cámaras municipales','#4a5560','Real'],
   ['cortes','Cortes y desvíos','#c8372d','Simulado'], ['reclamos','Reclamos vecinales','#c8372d','Simulado']];
 $('#layers').innerHTML = '<h4>Qué ver a tu alrededor</h4>' + LAYERS.map(([k,t,c,s]) => `<label><input type="checkbox" id="ly-${k}" ${S.layers[k] ? 'checked' : ''}><span class="sw" style="background:${c}"></span>${t}<small>${s}</small></label>`).join('');
@@ -1127,17 +1129,17 @@ function renderView(B){
     h += src(null, `Corte simulado${ob && ob.puntos ? ' junto a una obra real del Infomapa' : ''}: los cortes programados no se publican como datos abiertos`);
   } else if (v.k === 'columna'){
     const r = reclamos.find(x => x.columna === o.i);
-    h += head('Columna de alumbrado', `<span class="pill sol">N° ${o.i + 1} de la capa municipal</span>`);
+    h += head(esTrans(o.i) ? 'Luminaria colgante' : 'Columna de alumbrado', `<span class="pill sol">${esTrans(o.i) ? 'Colgada de un cable sobre la calle' : 'Poste de alumbrado'}</span>`);
     h += r ? `<div class="dup"><h3>Ya hay un reclamo en esta columna</h3><p style="margin:0">${esc(r.titulo)} · ${r.adhesiones + 1} vecinos · ${EST_REC[r.estado][0]} desde el ${fmtFecha(r.fecha)}</p><div class="btns"><button class="btn red" id="sumar">Sumarme al reclamo</button><button class="btn sec2" data-open="reclamo:${r.id}">Ver reclamo</button></div></div>`
-           : `<p>No hay reclamos abiertos para esta columna.</p><div class="btns"><button class="btn red" id="repLuz">${ICON.luz}Reportar luminaria</button></div>`;
-    h += `<dl class="meta"><dt>Distancia</dt><dd>${fmtM(dist(p, [o.lat, o.lon]))}</dd><dt>Área</dt><dd>Alumbrado Público</dd></dl>` + src('Posición real · capa "Columnas" del Infomapa');
+           : `<p>No hay reclamos abiertos para esta luminaria.</p><div class="btns"><button class="btn red" id="repLuz">${ICON.luz}Reportar luminaria</button></div>`;
+    h += `<dl class="meta"><dt>Distancia</dt><dd>${fmtM(dist(p, [o.lat, o.lon]))}</dd><dt>Área</dt><dd>Alumbrado Público</dd></dl>` + src(`Posición real · capa "${esTrans(o.i) ? 'Transversales' : 'Columnas'}" (Alumbrado Público) del Infomapa`);
   } else if (v.k === 'reclamo'){
     const mine = S.mine.some(m => m.ref === o.id);
     h += head(esc(o.titulo), `<span class="pill ${EST_REC[o.estado][1]}">${EST_REC[o.estado][0]}</span>`);
     h += `<div class="big"><div><b>${o.adhesiones + 1}</b><small>${o.adhesiones ? 'vecinos reportaron esto' : 'vecino lo reportó'}</small></div><div><b>${Math.max(0, Math.round((Date.now() - new Date(o.fecha + 'T12:00')) / 864e5))}</b><small>días abierto</small></div></div>`;
     h += `<dl class="meta"><dt>N° de reclamo</dt><dd class="ticket">${o.id}</dd><dt>Área</dt><dd>${esc(o.area)}</dd><dt>Iniciado</dt><dd>${fmtFecha(o.fecha)}</dd><dt>Distancia</dt><dd>${fmtM(dist(p, [o.lat, o.lon]))}</dd></dl>`;
     h += mine ? `<div class="ok"><h3>Ya estás sumado</h3>Te avisamos cuando cambie de estado.</div>` : `<div class="btns"><button class="btn red" id="sumar">Sumarme al reclamo</button></div>`;
-    h += `<p class="s" style="font-size:12.5px;color:var(--ink-2)">Cada vecino que se suma le da más prioridad en las órdenes de trabajo, sin crear un reclamo duplicado.</p>` + src(null, o.columna != null ? 'Columna real del Infomapa; el reclamo es simulado (el sistema de reclamos municipal es interno)' : o.elem?.[0] === 'S' ? 'Semáforo real (dataset municipal); el reclamo es simulado (el sistema de reclamos municipal es interno)' : o.elem?.[0] === 'C' ? 'Contenedor real (dataset municipal); el reclamo es simulado (el sistema de reclamos municipal es interno)' : 'Reclamo simulado: el sistema de reclamos municipal (SUACI) es interno');
+    h += `<p class="s" style="font-size:12.5px;color:var(--ink-2)">Cada vecino que se suma le da más prioridad en las órdenes de trabajo, sin crear un reclamo duplicado.</p>` + src(null, o.columna != null ? 'Luminaria real del Infomapa; el reclamo es simulado (el sistema de reclamos municipal es interno)' : o.elem?.[0] === 'S' ? 'Semáforo real (dataset municipal); el reclamo es simulado (el sistema de reclamos municipal es interno)' : o.elem?.[0] === 'C' ? 'Contenedor real (dataset municipal); el reclamo es simulado (el sistema de reclamos municipal es interno)' : 'Reclamo simulado: el sistema de reclamos municipal (SUACI) es interno');
     if (o.autor) h += `<p class="s" style="font-size:12.5px;color:var(--ink-2)">Lo inició ${esc(o.autor)}.</p>`;
   } else if (v.k === 'contenedor' || v.k === 'semaforo'){
     const E = ELEM[v.k], key = E.pre + o.i, r = reclamos.find(x => x.elem === key);
@@ -1228,7 +1230,7 @@ function renderReport(B){
     if (ELEM[v.tipo] && v.elem == null){ const e = elemCercano(v.tipo, S.pos); if (e){ v.elem = e.key; at = e.at; } else v.elem = false; }
     v.at = at;
     if (ELEM[v.tipo]) colTxt = v.elem ? `<div class="card" style="margin-top:8px"><b>${ELEM[v.tipo].nom} detectado</b><br><span style="font-size:13px">${v.tipo === 'semaforo' ? 'Cruce semaforizado de la capa municipal' : 'Contenedor del mapa'}, a ${fmtM(dist(S.pos, at))} tuyo.</span></div>` : `<div class="card" style="margin-top:8px">No encontramos ${v.tipo === 'semaforo' ? 'un semáforo' : 'un contenedor'} a menos de 45 m. Usamos tu ubicación.</div>`;
-    if (v.tipo === 'luminaria') colTxt = v.col != null ? `<div class="card" style="margin-top:8px"><b>Columna detectada</b><br><span style="font-size:13px">N° ${v.col + 1} de la capa municipal de alumbrado, a ${fmtM(dist(S.pos, at))} tuyo.</span></div>` : `<div class="card" style="margin-top:8px">No encontramos una columna municipal a menos de 35 m. Usamos tu ubicación.</div>`;
+    if (v.tipo === 'luminaria') colTxt = v.col != null ? `<div class="card" style="margin-top:8px"><b>Luminaria detectada</b><br><span style="font-size:13px">${esTrans(v.col) ? 'Luminaria colgante' : 'Poste de alumbrado'} de la capa municipal, a ${fmtM(dist(S.pos, at))} tuyo.</span></div>` : `<div class="card" style="margin-top:8px">No encontramos una luminaria municipal a menos de 35 m. Usamos tu ubicación.</div>`;
     const dirTxt = S.addr?.calle ? `${S.addr.calle}${S.addr.barrio ? ', barrio ' + S.addr.barrio : ''}` : `Distrito ${zonaDe(at)}`;
     h += `<p style="margin:2px 0 0"><b>${REC_TIPOS[v.tipo][0]}</b> en ${esc(dirTxt)}.</p>${colTxt}${photoField('fotoRec')}
       <label class="f" for="detRec">Detalle (opcional)</label><textarea id="detRec" placeholder="Ej.: está apagada desde el lunes"></textarea>
@@ -1418,13 +1420,18 @@ const fmtMin = m => m < 1 ? 'menos de 1 min' : m < 60 ? `${Math.round(m)} min` :
 function locOf(v){ const o = v?.o; if (!o || v.k === 'reportar') return null;
   if (v.k === 'corte' && o.tramo) return [(o.tramo[0][0] + o.tramo[1][0]) / 2, (o.tramo[0][1] + o.tramo[1][1]) / 2];
   return o.lat != null ? [o.lat, o.lon] : null; }
-function nombreDe(v){ const o = v.o; return v.k === 'parada' ? `Parada N° ${o.num}` : v.k === 'columna' ? 'Columna de alumbrado' : v.k === 'semaforo' ? semInfo[o.i][0] : v.k === 'wifi' ? 'WiFi público' : v.k === 'camara' ? 'Cámara'
+function nombreDe(v){ const o = v.o; return v.k === 'parada' ? `Parada N° ${o.num}` : v.k === 'columna' ? (esTrans(o.i) ? 'Luminaria colgante' : 'Columna de alumbrado') : v.k === 'semaforo' ? semInfo[o.i][0] : v.k === 'wifi' ? 'WiFi público' : v.k === 'camara' ? 'Cámara'
   : v.k === 'contenedor' ? 'Contenedor' : v.k === 'corte' ? (o.tipo === 'total' ? 'Corte total' : 'Reducción de calzada') : (o.titulo || o.nombre || ''); }
 function clearSel(){ if (!S.sel) return; S.sel = null; lay.sel.clearLayers(); if (!S.nav?.sim){ S.nav = null; lay.nav.clearLayers(); } }
 function padVista(){
   const desk = innerWidth >= 860, panel = desk && !document.body.classList.contains('panel-off');
   const sh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-h')) || 210;
   return {paddingTopLeft:[panel ? 470 : 40, desk ? 130 : 175], paddingBottomRight:[desk ? 90 : 40, desk ? 40 : Math.min(sh, innerHeight * .6) + 30], maxZoom:17};
+}
+// ¿el punto se ve en la parte del mapa que no tapan el panel ni el encabezado?
+function visible(at){
+  const pv = padVista(), pt = map.latLngToContainerPoint(at), sz = map.getSize();
+  return pt.x > pv.paddingTopLeft[0] - 20 && pt.y > pv.paddingTopLeft[1] - 20 && pt.x < sz.x - pv.paddingBottomRight[0] + 20 && pt.y < sz.y - pv.paddingBottomRight[1] + 20;
 }
 function selectOnMap(v, prevKey){
   const at = locOf(v); if (!at){ return; }
@@ -1434,6 +1441,7 @@ function selectOnMap(v, prevKey){
   L.marker(at, {icon:L.divIcon({className:'', html:`<div class="selmk"><div class="ring"></div><div class="core"></div><div class="lbl">${esc(nombreDe(v))}</div></div>`, iconSize:[64,64], iconAnchor:[32,32]}), interactive:false, zIndexOffset:1800}).addTo(lay.sel);
   if (key === prevKey) return;                       // misma cosa (por ejemplo, al volver de un formulario): no mover el mapa
   setTimeout(() => {                                  // después de que el panel cambió de tamaño
+    if (visible(at)) return;                          // si ya se ve (por ejemplo, lo tocaste en el mapa), el mapa no se mueve
     const p = S.follow ? S.pos : S.focus, b = L.latLngBounds([p, at]);
     map.flyToBounds(b, {...padVista(), duration:.6});
   }, 0);
