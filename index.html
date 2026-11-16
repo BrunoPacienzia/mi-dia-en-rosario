@@ -575,6 +575,7 @@ const ICON = {
   up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9H4v-9zM7 11l4-8c1.5 0 2.5 1 2.5 2.5V9h5a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 17.3 20H7"/></svg>',
   down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13V4H4v9zM7 13l4 8c1.5 0 2.5-1 2.5-2.5V15h5a2 2 0 0 0 2-2.3l-1.2-7A2 2 0 0 0 17.3 4H7"/></svg>',
 };
+ICON.wifi = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1.2" fill="currentColor"/></svg>';
 const VIA = {usuario:'Ingresó con usuario y contraseña', google:'Ingresó con Google (simulado)', facebook:'Ingresó con Facebook (simulado)'};
 const REC_TIPOS = {luminaria:['Luminaria','luz'], contenedor:['Contenedor','basura'], bache:['Bache','bache'], arbol:['Árbol o rama','arbol'], semaforo:['Semáforo','semaforo'], vereda:['Vereda rota','vereda'], otro:['Otro','otro']};
 const AREA = {luminaria:'Alumbrado Público', contenedor:'Higiene Urbana', bache:'Obras Públicas', arbol:'Parques y Paseos', semaforo:'Tránsito', vereda:'Obras Públicas', otro:'Atención Ciudadana (147)'};
@@ -604,7 +605,11 @@ function query(ix, p, r){ const dl = r/111320, dn = r/93500, out = [];
 const ixStops = grid(stops, s => [s.lat, s.lon]);
 const ixCols = grid(cols, c => c);
 const semaf = D.semaforos.cruces;              // reales (Infomapa)
-const conts = D.sim.contenedores;              // simulados: [lat, lon, tipo, estado]
+const conts = D.sim.contenedores;              // ubicación y tipo reales; estado simulado: [lat, lon, tipo, estado]
+const contInfo = D.contenedores.contenedores;  // [lat, lon, tipo, dirección, clasificación, empresa]
+const semInfo = D.semaforos.info;              // [nombre del cruce, tipo, zona]
+const camaras = D.camaras.camaras, wifi = D.wifi.puntos;
+const ixCam = grid(camaras, c => c), ixWifi = grid(wifi, c => c);
 const ixSem = grid(semaf, c => c), ixCont = grid(conts, c => c);
 const EST_CONT = {ok:['En condiciones','done'], lleno:['Desbordado','exec'], roto:['Roto','crit']};
 const ELEM = {
@@ -617,7 +622,7 @@ const S = {
   pos: D.sim.ruta_demo[0].slice(), focus: D.sim.ruta_demo[0].slice(), follow: true, heading: null, gps: null,
   mode: 'peaton', radio: null, tab: 'cerca', view: null, mine: [], prompted: new Set(), lastNudge: 0,
   shown: new Set(), firstDraw: true, addr: null,
-  layers: {oreal:true, obras:true, pp:true, paradas:true, bicis:true, cortes:true, reclamos:true, luminarias:true, semaforos:true, contenedores:true},
+  layers: {oreal:true, obras:true, pp:true, paradas:true, bicis:true, cortes:true, reclamos:true, luminarias:true, semaforos:true, contenedores:true, wifi:true, camaras:false},
 };
 const R = () => S.radio || RADIO_MODO[S.mode];
 
@@ -719,7 +724,7 @@ function setBase(){
   map.getContainer().classList.toggle('map-dark', dark());
 }
 setBase(); matchMedia('(prefers-color-scheme: dark)').addEventListener('change', setBase);
-const lay = {}; ['foco','oreal','obras','pp','paradas','bicis','cortes','luminarias','contenedores','semaforos','reclamos','buses','ruta','linea','nav','sel'].forEach(k => lay[k] = L.layerGroup().addTo(map));
+const lay = {}; ['foco','oreal','obras','pp','paradas','bicis','cortes','luminarias','contenedores','camaras','wifi','semaforos','reclamos','buses','ruta','linea','nav','sel'].forEach(k => lay[k] = L.layerGroup().addTo(map));
 const canvasR = L.canvas({padding:.4});
 const icon = (cls, html, size, isNew) => L.divIcon({className:'', html:`<div class="mk ${cls}${isNew ? ' pop' : ''}" style="width:${size}px;height:${size}px">${html}</div>`, iconSize:[size,size], iconAnchor:[size/2,size/2]});
 
@@ -739,7 +744,7 @@ function drawAround(){
   const p = S.focus, r = R(), A = alrededor(p, r), z = map.getZoom();
   const now = new Set();
   const isNew = id => { now.add(id); return !S.shown.has(id) && !S.firstDraw; };
-  ['oreal','obras','pp','cortes','reclamos','bicis','paradas','luminarias','contenedores','semaforos'].forEach(k => lay[k].clearLayers());
+  ['oreal','obras','pp','cortes','reclamos','bicis','paradas','luminarias','contenedores','camaras','wifi','semaforos'].forEach(k => lay[k].clearLayers());
   drawFoco();
   const nuevos = [];
   A.oreal.forEach(({o}) => {
@@ -763,8 +768,14 @@ function drawAround(){
       .on('click', () => open({k:'columna', o:{i, lat:c[0], lon:c[1]}})).addTo(lay.luminarias); });
   const recEl = new Set(reclamos.filter(x => x.elem).map(x => x.elem));
   if (S.layers.contenedores && z >= 15) query(ixCont, p, r).forEach(i => { const c = conts[i]; if (dist(p, c) > r) return; const con = recEl.has('C' + i), mal = c[3] !== 'ok';
-    L.circleMarker([c[0], c[1]], {renderer:canvasR, radius: con ? 6.5 : (z >= 17 ? 5.5 : 4), weight: con || mal ? 2.5 : 1.5, color: con ? '#c8372d' : mal ? '#e08a00' : (dark() ? '#0d1418' : '#fff'), fillColor: c[2] === 'reciclables' ? '#2e9e5b' : '#56646c', fillOpacity:.95})
+    L.circleMarker([c[0], c[1]], {renderer:canvasR, radius: con ? 6.5 : (z >= 17 ? 5.5 : 4), weight: con || mal ? 2.5 : 1.5, color: con || mal ? '#c8372d' : (dark() ? '#0d1418' : '#fff'), fillColor: c[2] === 'reciclables' ? '#ee8a12' : '#2f8a4e', fillOpacity:.95})
       .on('click', () => open({k:'contenedor', o:{i, lat:c[0], lon:c[1], tipo:c[2], estado:c[3]}})).addTo(lay.contenedores); });
+  if (S.layers.wifi && z >= 14) query(ixWifi, p, r).forEach(i => { const c = wifi[i]; if (dist(p, c) > r) return;
+    L.marker([c[0], c[1]], {icon:L.divIcon({className:'', html:`<div class="mk" style="background:#0f8a8a;width:26px;height:26px">${ICON.wifi}</div>`, iconSize:[26,26], iconAnchor:[13,13]}), title:'WiFi público', zIndexOffset:160})
+      .on('click', () => open({k:'wifi', o:{i, lat:c[0], lon:c[1], dir:c[2]}})).addTo(lay.wifi); });
+  if (S.layers.camaras && z >= 15) query(ixCam, p, r).forEach(i => { const c = camaras[i]; if (dist(p, c) > r) return;
+    L.marker([c[0], c[1]], {icon:L.divIcon({className:'', html:`<div class="mk" style="background:#4a5560;width:20px;height:20px">${ICON.cam}</div>`, iconSize:[20,20], iconAnchor:[10,10]}), title:'Cámara', zIndexOffset:120})
+      .on('click', () => open({k:'camara', o:{i, lat:c[0], lon:c[1], tipo:c[2], clase:c[3], desc:c[4]}})).addTo(lay.camaras); });
   if (S.layers.semaforos && z >= 15) query(ixSem, p, r).forEach(i => { const c = semaf[i]; if (dist(p, c) > r) return; const con = recEl.has('S' + i), sz = z >= 17 ? 1 : .8;
     L.marker(c, {icon:L.divIcon({className:'', html:`<div class="mk sem${con ? ' con' : ''}" style="width:${Math.round(11*sz)}px;height:${Math.round(20*sz)}px"><i></i><i></i><i></i></div>`, iconSize:[Math.round(11*sz), Math.round(20*sz)], iconAnchor:[Math.round(5.5*sz), Math.round(10*sz)]}), title:'Semáforo', zIndexOffset:150})
       .on('click', () => open({k:'semaforo', o:{i, lat:c[0], lon:c[1]}})).addTo(lay.semaforos); });
@@ -954,7 +965,7 @@ async function buscar(t){
 /* ---------- capas ---------- */
 const LAYERS = [['oreal','Obras del Infomapa','#5b4bc4','Real'], ['pp','Presupuesto Participativo','#e8a600','Real'], ['paradas','Paradas de colectivo','#2a86c4','Real'],
   ['bicis','Mi Bici Tu Bici','#0f8a83','Real'], ['luminarias','Columnas de alumbrado','#e8a600','Real'], ['obras','Reparaciones (bacheo, veredas)','#1f8a4c','Simulado'],
-  ['semaforos','Semáforos','#14222b','Real'], ['contenedores','Contenedores de residuos','#56646c','Simulado'],
+  ['semaforos','Semáforos','#14222b','Real'], ['contenedores','Contenedores (verde residuos, naranja reciclables)','#2f8a4e','Real'], ['wifi','WiFi público','#0f8a8a','Real'], ['camaras','Cámaras municipales','#4a5560','Real'],
   ['cortes','Cortes y desvíos','#c8372d','Simulado'], ['reclamos','Reclamos vecinales','#c8372d','Simulado']];
 $('#layers').innerHTML = '<h4>Qué ver a tu alrededor</h4>' + LAYERS.map(([k,t,c,s]) => `<label><input type="checkbox" id="ly-${k}" ${S.layers[k] ? 'checked' : ''}><span class="sw" style="background:${c}"></span>${t}<small>${s}</small></label>`).join('');
 LAYERS.forEach(([k]) => $('#ly-' + k).onchange = e => { S.layers[k] = e.target.checked; drawAround(); render(); });
@@ -1126,16 +1137,26 @@ function renderView(B){
     h += `<div class="big"><div><b>${o.adhesiones + 1}</b><small>${o.adhesiones ? 'vecinos reportaron esto' : 'vecino lo reportó'}</small></div><div><b>${Math.max(0, Math.round((Date.now() - new Date(o.fecha + 'T12:00')) / 864e5))}</b><small>días abierto</small></div></div>`;
     h += `<dl class="meta"><dt>N° de reclamo</dt><dd class="ticket">${o.id}</dd><dt>Área</dt><dd>${esc(o.area)}</dd><dt>Iniciado</dt><dd>${fmtFecha(o.fecha)}</dd><dt>Distancia</dt><dd>${fmtM(dist(p, [o.lat, o.lon]))}</dd></dl>`;
     h += mine ? `<div class="ok"><h3>Ya estás sumado</h3>Te avisamos cuando cambie de estado.</div>` : `<div class="btns"><button class="btn red" id="sumar">Sumarme al reclamo</button></div>`;
-    h += `<p class="s" style="font-size:12.5px;color:var(--ink-2)">Cada vecino que se suma le da más prioridad en las órdenes de trabajo, sin crear un reclamo duplicado.</p>` + src(null, o.columna != null ? 'Columna real del Infomapa; el reclamo es simulado (el sistema de reclamos municipal es interno)' : o.elem?.[0] === 'S' ? 'Semáforo real del Infomapa; el reclamo es simulado (el sistema de reclamos municipal es interno)' : 'Reclamo simulado: el sistema de reclamos municipal (SUACI) es interno');
+    h += `<p class="s" style="font-size:12.5px;color:var(--ink-2)">Cada vecino que se suma le da más prioridad en las órdenes de trabajo, sin crear un reclamo duplicado.</p>` + src(null, o.columna != null ? 'Columna real del Infomapa; el reclamo es simulado (el sistema de reclamos municipal es interno)' : o.elem?.[0] === 'S' ? 'Semáforo real (dataset municipal); el reclamo es simulado (el sistema de reclamos municipal es interno)' : o.elem?.[0] === 'C' ? 'Contenedor real (dataset municipal); el reclamo es simulado (el sistema de reclamos municipal es interno)' : 'Reclamo simulado: el sistema de reclamos municipal (SUACI) es interno');
     if (o.autor) h += `<p class="s" style="font-size:12.5px;color:var(--ink-2)">Lo inició ${esc(o.autor)}.</p>`;
   } else if (v.k === 'contenedor' || v.k === 'semaforo'){
     const E = ELEM[v.k], key = E.pre + o.i, r = reclamos.find(x => x.elem === key);
     if (v.k === 'contenedor') h += head(o.tipo === 'reciclables' ? 'Contenedor de reciclables' : 'Contenedor de residuos', `<span class="pill ${EST_CONT[o.estado][1]}">${EST_CONT[o.estado][0]}</span>`);
-    else h += head('Semáforo', `<span class="pill ${r ? 'crit' : 'done'}">${r ? 'Con reclamo abierto' : 'Funcionando'}</span>`);
+    else h += head(`Semáforo · ${semInfo[o.i][0]}`, `<span class="pill ${r ? 'crit' : 'done'}">${r ? 'Con reclamo abierto' : 'Funcionando'}</span>`);
     h += r ? `<div class="dup"><h3>Ya hay un reclamo ${v.k === 'contenedor' ? 'en este contenedor' : 'en este cruce'}</h3><p style="margin:0">${esc(r.titulo)} · ${r.adhesiones + 1} vecinos · ${EST_REC[r.estado][0]} desde el ${fmtFecha(r.fecha)}</p><div class="btns"><button class="btn red" id="sumar">Sumarme al reclamo</button><button class="btn sec2" data-open="reclamo:${r.id}">Ver reclamo</button></div></div>`
            : `<p>No hay reclamos abiertos ${v.k === 'contenedor' ? 'para este contenedor' : 'para este semáforo'}.</p><div class="btns"><button class="btn red" id="repEl">${ICON[v.k === 'contenedor' ? 'basura' : 'semaforo']}Reportar ${v.k === 'contenedor' ? 'contenedor' : 'semáforo'}</button></div>`;
-    h += `<dl class="meta"><dt>Distancia</dt><dd>${fmtM(dist(p, [o.lat, o.lon]))}</dd><dt>Área</dt><dd>${E.area}</dd>${v.k === 'contenedor' ? `<dt>Recolección</dt><dd>Todos los días, turno noche</dd>` : ''}</dl>`;
-    h += v.k === 'semaforo' ? src('Posición real · capa "Cruces con Semáforos" del Infomapa') : src(null, 'Contenedor simulado: la ubicación de los contenedores no se publica como capa abierta');
+    if (v.k === 'contenedor'){ const ci = contInfo[o.i];
+      h += `<dl class="meta"><dt>Dirección</dt><dd>${esc(ci[3])}</dd><dt>Tipo</dt><dd>${esc(ci[4])}${o.tipo === 'reciclables' ? ' (residuos secos)' : ''}</dd><dt>Recolección</dt><dd>${esc(ci[5] || 'Sin dato')}</dd><dt>Distancia</dt><dd>${fmtM(dist(p, [o.lat, o.lon]))}</dd><dt>Área</dt><dd>${E.area}</dd></dl>`;
+      h += src('Ubicación, tipo y empresa reales · dataset municipal "Contenedores en la vía pública"') + src(null, 'El estado (en condiciones, desbordado o roto) es simulado');
+    } else { const si = semInfo[o.i];
+      h += `<dl class="meta"><dt>Cruce</dt><dd>${esc(si[0])}</dd><dt>Tipo</dt><dd>${esc(si[1])}</dd><dt>Mantenimiento</dt><dd>${esc(si[2])}</dd><dt>Distancia</dt><dd>${fmtM(dist(p, [o.lat, o.lon]))}</dd><dt>Área</dt><dd>${E.area}</dd></dl>`;
+      h += src('Ubicación y tipo reales · dataset municipal "Esquinas semaforizadas"'); }
+  } else if (v.k === 'wifi'){
+    h += head('WiFi público', '<span class="pill done">Gratis</span>');
+    h += `<p>Punto de acceso a internet gratuito de la Municipalidad.</p><dl class="meta"><dt>Dirección</dt><dd>${esc(o.dir)}</dd><dt>Distancia</dt><dd>${fmtM(dist(p, [o.lat, o.lon]))}</dd></dl>` + src('Ubicación real · dataset municipal "WiFi"');
+  } else if (v.k === 'camara'){
+    h += head(o.tipo, `<span class="pill">${esc(o.clase)}</span>`);
+    h += `<dl class="meta"><dt>Ubicación</dt><dd>${esc(o.desc)}</dd><dt>Distancia</dt><dd>${fmtM(dist(p, [o.lat, o.lon]))}</dd></dl>` + src('Ubicación real · dataset municipal "Cámaras"');
   } else if (v.k === 'reportar') return renderReport(B);
   else if (v.k === 'opinar') return renderOpinar(B);
   else if (v.k === 'ajustar') return renderAjuste(B);
@@ -1397,7 +1418,7 @@ const fmtMin = m => m < 1 ? 'menos de 1 min' : m < 60 ? `${Math.round(m)} min` :
 function locOf(v){ const o = v?.o; if (!o || v.k === 'reportar') return null;
   if (v.k === 'corte' && o.tramo) return [(o.tramo[0][0] + o.tramo[1][0]) / 2, (o.tramo[0][1] + o.tramo[1][1]) / 2];
   return o.lat != null ? [o.lat, o.lon] : null; }
-function nombreDe(v){ const o = v.o; return v.k === 'parada' ? `Parada N° ${o.num}` : v.k === 'columna' ? 'Columna de alumbrado' : v.k === 'semaforo' ? 'Semáforo'
+function nombreDe(v){ const o = v.o; return v.k === 'parada' ? `Parada N° ${o.num}` : v.k === 'columna' ? 'Columna de alumbrado' : v.k === 'semaforo' ? semInfo[o.i][0] : v.k === 'wifi' ? 'WiFi público' : v.k === 'camara' ? 'Cámara'
   : v.k === 'contenedor' ? 'Contenedor' : v.k === 'corte' ? (o.tipo === 'total' ? 'Corte total' : 'Reducción de calzada') : (o.titulo || o.nombre || ''); }
 function clearSel(){ if (!S.sel) return; S.sel = null; lay.sel.clearLayers(); if (!S.nav?.sim){ S.nav = null; lay.nav.clearLayers(); } }
 function padVista(){
